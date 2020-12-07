@@ -94,7 +94,10 @@ CGraphicsView::CGraphicsView(DWidget *parent)
     , m_scale(1)
     , m_isShowContext(true)
     , m_isStopContinuousDrawing(false)
+    , m_externalCopyFlag(true)
 {
+    m_internalShapeData = nullptr;
+
     setOptimizationFlags(IndirectPainting);
     m_pUndoStack = new QUndoStack(this);
     CUndoRedoCommand::setUndoRedoStack(m_pUndoStack, this);
@@ -372,6 +375,9 @@ void CGraphicsView::initContextMenu()
 
 void CGraphicsView::initContextMenuConnection()
 {
+    // 连接dataChanged用于切换粘贴来源
+    connect(QApplication::clipboard(), SIGNAL(dataChanged()), this, SLOT(slotOnDataChanged()));
+
     connect(m_cutAct, SIGNAL(triggered()), this, SLOT(slotOnCut()));
     connect(m_copyAct, SIGNAL(triggered()), this, SLOT(slotOnCopy()));
     connect(m_pasteAct, &QAction::triggered, this, [ = ]() {
@@ -933,6 +939,12 @@ void CGraphicsView::slotAddItemFromDDF(QGraphicsItem *item, bool pushToStack)
     }
 }
 
+void CGraphicsView::slotOnDataChanged()
+{
+    qDebug() << "Detect Copy From External."  << endl;
+    m_externalCopyFlag = true;
+}
+
 void CGraphicsView::slotOnCut()
 {
 //    //记录还原点
@@ -958,10 +970,17 @@ void CGraphicsView::slotOnCut()
 
 void CGraphicsView::slotOnCopy()
 {
-    CShapeMimeData *data = new CShapeMimeData(drawScene()->getGroupTreeInfo(drawScene()->selectGroup()));
-    data->setText("");
-    QApplication::clipboard()->setMimeData(data);
+    if (m_internalShapeData!=nullptr) {
+        delete m_internalShapeData;
+    }
+    m_internalShapeData = new CShapeMimeData(drawScene()->getGroupTreeInfo(drawScene()->selectGroup()));
+    // CShapeMimeData *data = new CShapeMimeData(drawScene()->getGroupTreeInfo(drawScene()->selectGroup()));
+    // data->setText("");
+    // QApplication::clipboard()->setMimeData(data);
     m_pasteAct->setEnabled(true);
+    m_externalCopyFlag = false;
+    //TODO: export pixmap to mimedata
+
 }
 
 void CGraphicsView::slotOnPaste(bool textItemInCenter)
@@ -971,7 +990,7 @@ void CGraphicsView::slotOnPaste(bool textItemInCenter)
     QString filePath = mp->text();
     //qDebug() << "slotOnPaste"  << endl;
 
-    if (!map.isNull()) {
+    if (m_externalCopyFlag && !map.isNull()) {
         //粘贴剪切板中的图片
         QVariant imageData = mp->imageData();
         QPixmap pixmap = imageData.value<QPixmap>();
@@ -982,7 +1001,8 @@ void CGraphicsView::slotOnPaste(bool textItemInCenter)
             emit signalPastePixmap(pixmap, src);
         }
         qDebug() << "imageData" << imageData << endl;
-    } else if (filePath != "") {
+    }
+    else if (m_externalCopyFlag && filePath != "") {
         // [0] 验证正确的图片路径
         Application *pApp = drawApp;
         if (pApp != nullptr) {
@@ -1032,11 +1052,14 @@ void CGraphicsView::slotOnPaste(bool textItemInCenter)
                 }
             }
         }
-    } else {
-        qDebug() << "mp->hasImage()"  << mp->hasImage() << endl;
+    }
+    else {
+        qDebug() << "mp->hasImage()"  << !m_externalCopyFlag << endl;
+        // qDebug() << "mp->hasImage()"  << mp->hasImage() << endl;
 
         //粘贴画板内部图元
-        CShapeMimeData *data = qobject_cast<CShapeMimeData *>(mp);
+        CShapeMimeData *data = qobject_cast<CShapeMimeData *>(m_internalShapeData);
+        // CShapeMimeData *data = qobject_cast<CShapeMimeData *>(mp);
         if (data != nullptr) {
             drawScene()->clearSelectGroup();
 

@@ -19,6 +19,8 @@
 #ifndef CGRAPHICSVIEW_H
 #define CGRAPHICSVIEW_H
 
+#include "drawshape/cshapemimedata.h"
+
 #include "csizehandlerect.h"
 #include "drawshape/globaldefine.h"
 
@@ -356,6 +358,11 @@ public slots:
 public slots:
 
     /**
+     * @brief slotOnDataChanged 切换粘贴来源
+     */
+    void slotOnDataChanged();
+
+    /**
      * @brief slotOnCut 剪切图元
      */
     void slotOnCut();
@@ -467,6 +474,8 @@ public slots:
 
 private:
     qreal m_scale; //记录当前缩放
+    bool m_externalCopyFlag; //用于slotOnPaste判断来源
+    CShapeMimeData *m_internalShapeData; //用于存储临时剪切/复制的图元
 
     CMenu *m_contextMenu;//右键菜单
     QAction *m_cutAct;              //剪切
